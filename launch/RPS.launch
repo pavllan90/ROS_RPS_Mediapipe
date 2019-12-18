@@ -1,0 +1,15 @@
+<launch>
+  <node pkg="cv_camera" type="cv_camera_node" name="cam_0">
+     <param name="frame_id" value="Rock Paper Scissors"/>
+     <param name="image_width" value="1280"/>
+	 <param name="image_height" value="960"/>
+     <param name="rate" value="60.0"/>
+  </node>
+  <node pkg="cv_tutorial" type="RockPaperScissorsClass.py" name="RPS_node"/>
+  <node pkg="cv_tutorial" type="image_out.py" name="image_out_node" cwd = "node"/>
+  <node pkg="image_view" type="image_view" name="Viewer">
+    <remap from="image" to="/image_out_node/result" />
+	<param name="_image_transport" value="theora"/>  
+	<param name="autosize" value="true"/>  
+  </node>
+</launch>

@@ -1,0 +1,124 @@
+!/usr/bin/env python
+import rospy
+from sensor_msgs.msg import Image
+import cv2
+import numpy as np
+import pickle
+from hand_tracker import HandTracker
+
+class RockPaperScissors:
+    def __init__(self):
+        rospy.init_node('rgb_object_detection')
+        
+        self.palm_model_path = "./nodes/py2-RPS/models/palm_detection.tflite"
+        self.landmark_model_path = "./nodes/py2-RPS/models/hand_landmark.tflite"
+        self.anchors_path = "./nodes/py2-RPS/data/anchors.csv" 
+        self.estimator_path = "/nodes/py2-RPS/logregest_1200.pickle"
+        
+        self.estimator = self.get_estimator()
+        self.detector = HandTracker(self.palm_model_path, self.landmark_model_path, self.anchors_path, box_shift=0.2, box_enlarge=1.3)
+        
+        self.img_sub = rospy.Subscriber("/cv_camera/image_raw", Image, self.img_to_cv2)
+
+        self.play_loop()
+        
+    def img_to_cv2(self, arg):
+        try:
+            self.cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+        except CvBridgeError as e:
+            print(e)
+    
+    def get_estimator(self):
+        with open('./nodes/py2-RPS/logregest_1200.pickle', 'rb') as f:
+            estimator = pickle.load(f)
+        return estimator
+       
+    def get_winner(self,res):
+        if(res[0] == res[1]):
+            return None
+        if(res[0] == 0 and res[1] == 1):
+            return 1
+        if(res[1] == 0 and res[0] == 1):
+            return 0
+        if(res[0] == 1 and res[1] == 2):
+            return 1
+        if(res[1] == 1 and res[0] == 2):
+            return 0
+        if(res[0] == 2 and res[1] == 0):
+            return 1
+        if(res[1] == 2 and res[0] == 0):
+            return 0
+
+    def num_to_gesture(n):
+        if(n == 0):
+            return "Rock"
+        if(n == 1):
+            return "Paper"
+        if(n == 2):
+            return "Scissors"
+            
+    def winner_result(self):
+        comp_move = np.random.randint(3)
+        kp, box = self.detector(self.cv2_frame[:,:,::-1])
+        player_move = self.estimator.predict(self.transform_frame(kp))
+        result = self.get_winner([player_move, comp_move])
+        cv2.putText(self.cv2_frame, "Your move is "+num_to_gesture(player_move), (100, 50), cv2.FONT_HERSHEY_SIMPLEX, 2, (0,0,0),5)
+        cv2.putText(self.cv2_frame, "My move is "+num_to_gesture(comp_move), (100, 150), cv2.FONT_HERSHEY_SIMPLEX, 2, (0,0,0),5)
+        if(result == None):
+            cv2.putText(self.cv2_frame, "No winner", (100, 250), cv2.FONT_HERSHEY_SIMPLEX, 2, (0,0,0),5)
+        elif(result == 0):
+            cv2.putText(self.cv2_frame, "You won!", (100, 250), cv2.FONT_HERSHEY_SIMPLEX, 2, (0,0,0),5)
+        else:
+            cv2.putText(self.cv2_frame, "I won!", (100, 250), cv2.FONT_HERSHEY_SIMPLEX, 2, (0,0,0),5)
+        cv2.imshow('Webcam', self.cv2_frame)
+        
+    def play_loop(self):
+        #cap = cv2.VideoCapture(0)
+        #cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        #cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 960)
+        #cap.set(cv2.CAP_PROP_FPS, 30)
+        under_line = False
+        count_moves = 0
+        fps_reduce = 0
+        kp, box = (0,0)
+        while(1):  
+           # ret, frame = cap.read()
+            try:
+                if(fps_reduce == 3):
+                    kp, box = self.detector(self.cv2_frame[:,:,::-1])
+                    #cv2.circle(frame, (int(kp[0,0]), int(kp[0,1])), 10, (0,0,255))
+                    fps_reduce = 0
+                    cv2.putText(self.cv2_frame, "Moves num {}".format(count_moves), (300, 50), cv2.FONT_HERSHEY_SIMPLEX, 2, (0,0,0),5)
+                    if(kp[0,1]>frame.shape[0]/2 and not under_line):
+                        under_line = True
+                        count_moves += 1
+                        if(count_moves >= 3):
+                            #ret, frame = cap.read()
+                            winner_result()
+                            count_moves = 0
+                            cv2.putText(self.cv2_frame, "Again? (y/q)", (100, 450), cv2.FONT_HERSHEY_SIMPLEX, 2, (0,0,0),5)
+                            cv2.imshow('Webcam',self.cv2_frame)
+                    elif(kp[0,1]<self.cv2_frame.shape[0]/2 and under_line):
+                        under_line = False  
+                else:
+                        fps_reduce+=1
+                cv2.line(self.cv2_frame, (int(0), int(self.cv2_frame.shape[0]/2)), (self.cv2_frame.shape[1], int(self.cv2_frame.shape[0]/2)),(0,255,0), 5)
+                cv2.imshow('Webcam',self.cv2_frame)
+            except ValueError:
+                kp = 0
+                cv2.line(self.cv2_frame, (int(0), int(self.cv2_frame.shape[0]/2)), (self.cv2_frame.shape[1], int(self.cv2_frame.shape[0]/2)),(0,255,0), 5)
+                cv2.imshow('Webcam',self.cv2_frame)
+            if cv2.waitKey(20) & 0xFF == ord('q'):
+                break
+        cap.release()
+        cv2.destroyAllWindows()
+        
+def main():
+    rps = RockPaperScissors()
+    try:
+      rospy.spin()
+    except KeyboardInterrupt:
+      print("Shutting down")
+
+if __name__=='__main__':
+    main():wq

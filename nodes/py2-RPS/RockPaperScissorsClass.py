@@ -27,9 +27,11 @@ class RockPaperScissors:
         self.count_moves = 0
         self.delay_counter = 0
         self.end_frame = 0
-        self.img_sub = rospy.Subscriber("/cam_0/image_raw", Image, self.img_to_cv2, queue_size = 1)
+
+        self.img_sub = rospy.Subscriber("/camera/color/image_raw", Image, self.img_to_cv2, queue_size = 1)
         self.res_pub = rospy.Publisher("/RPS_node/result",  String, queue_size = 1)
-        self.res_pub.publish("playing")
+        self.res_pub.publish("playing a b")
+        
 
     def transform_frame(self, data):
         for i in range(21):
@@ -41,6 +43,8 @@ class RockPaperScissors:
     def img_to_cv2(self, arg):
         try:
             self.cv2_frame = self.bridge.imgmsg_to_cv2(arg, "bgr8")
+            cv2.namedWindow('image',cv2.WINDOW_NORMAL)
+            cv2.resizeWindow('image', 1240,960)
             self.play_loop()
         except CvBridgeError as e:
             print(e)
@@ -67,10 +71,10 @@ class RockPaperScissors:
             return 0
 
     def show_res(self):
-            cv2.imshow('Image',self.end_frame)
+            cv2.imshow('image',self.end_frame)
             if(cv2.waitKey(1) & 0xFF == ord('y')):
                 self.end_flag = False     
-                self.res_pub.publish("playing")
+                self.res_pub.publish("playing a b")
         
     
     def num_to_gesture(self, n):
@@ -101,6 +105,7 @@ class RockPaperScissors:
         
     def play_loop(self):
         kp, box = (0,0)
+
         try:
             if(self.end_flag):
                 self.show_res()
@@ -109,7 +114,6 @@ class RockPaperScissors:
                 kp, box = self.detector(self.cv2_frame[:,:,::-1])
                 self.fps_reduce = 0
                 print(self.count_moves)
-                #cv2.putText(self.cv2_frame, "Moves num {}".format(self.count_moves), (300, 50y), cv2.FONT_HERSHEY_SIMPLEX, 2, (0,0,0),5)
                 if(kp[0,1]>self.cv2_frame.shape[0]/2 and not self.under_line):
                     self.count_moves += 1
                     self.under_line = True
@@ -127,7 +131,7 @@ class RockPaperScissors:
             kp = 0
         cv2.line(self.cv2_frame, (int(0), int(self.cv2_frame.shape[0]/2)), (self.cv2_frame.shape[1], int(self.cv2_frame.shape[0]/2)),(0,255,0), 5)
         cv2.putText(self.cv2_frame, "Moves num {}".format(self.count_moves), (800, 50), cv2.FONT_HERSHEY_SIMPLEX, 2, (0,0,0),5)
-        cv2.imshow('Image',self.cv2_frame)
+        cv2.imshow('image',self.cv2_frame)
         while(1):    
             if(cv2.waitKey(5) ):
                 break
